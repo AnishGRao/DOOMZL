@@ -5,6 +5,7 @@
 # $Log:$
 #
 CC=  gcc  # gcc or g++
+CXX= g++
 
 CFLAGS=-g -Wall -DNORMALUNIX -DLINUX # -DUSEASM 
 # Kill the old link flag, did not work.
@@ -16,6 +17,9 @@ LIBS=-lXext -lX11 -lm
 # subdirectory for objects
 O=linux
 
+# libdoomzl (the c++ interop layer for larger functionality I must add)
+DOOMZLOBJS=$(O)/doomzl.o
+DOOMZLINCLUDEFLAG=-I doomzl/
 # not too sophisticated dependency
 OBJS=				\
 		$(O)/doomdef.o		\
@@ -82,6 +86,7 @@ OBJS=				\
 
 # Got unhappy I had to keep re-creating the linux folder after
 # stashing changes, so I forced it to create.
+.PHONY: all
 all:	 $(O) $(O)/linuxxdoom
 
 $(O):
@@ -91,8 +96,13 @@ clean:
 	rm -f *.o *~ *.flc
 	rm -f linux/*
 
-$(O)/linuxxdoom:	$(OBJS) $(O)/i_main.o
-	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) $(O)/i_main.o \
+# Compile this guy to an object but don't link yet.
+.PHONY: doomzl
+doomzl:
+	g++ -std=c++17 -c -I doomzl/ -c doomzl/*.cc -o $(DOOMZLOBJS)
+
+$(O)/linuxxdoom:	$(OBJS) doomzl $(O)/i_main.o
+	$(CXX) $(DOOMZLINCLUDEFLAG) $(CFLAGS) $(LDFLAGS) $(OBJS) $(DOOMZLOBJS) $(O)/i_main.o \
 	-o $(O)/linuxxdoom $(LIBS)
 
 $(O)/%.o:	%.c | $(O)
