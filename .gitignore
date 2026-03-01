@@ -1,0 +1,5 @@
+# Find your shareware. I recommend a site that rhymes with WosWox
+DOOMWADDIR/**
+
+# Don't commit build outputs.
+sndserv/linux/**
