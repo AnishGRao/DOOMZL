@@ -503,8 +503,14 @@ void D_AdvanceDemo (void)
 
 	    if ( gamemode == retail )
 	      pagename = "CREDIT";
-	    else
+	    else if (W_CheckNumForName("HELP2") != -1)
+		{
 	      pagename = "HELP2";
+		}
+		else if (W_CheckNumForName("HELP1") != -1)
+		{
+	    	pagename = "HELP1";
+		}
 	}
 	break;
       case 5:

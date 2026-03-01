@@ -715,9 +715,11 @@ void F_Drawer (void)
 	    if ( gamemode == retail )
 	      V_DrawPatch (0,0,0,
 			 W_CacheLumpName("CREDIT",PU_CACHE));
-	    else
+	    else if (W_CheckNumForName("HELP2") != -1)
+		{
 	      V_DrawPatch (0,0,0,
 			 W_CacheLumpName("HELP2",PU_CACHE));
+		}
 	    break;
 	  case 2:
 	    V_DrawPatch(0,0,0,
@@ -734,5 +736,4 @@ void F_Drawer (void)
     }
 			
 }
-
 
