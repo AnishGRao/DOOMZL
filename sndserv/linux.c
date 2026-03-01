@@ -39,12 +39,14 @@ static const char rcsid[] = "$Id: linux.c,v 1.3 1997/01/26 07:45:01 b1 Exp $";
 #include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
+#include <errno.h>
 
 #include <linux/soundcard.h>
 
 #include "soundsrv.h"
 
-int	audio_fd;
+int	audio_fd = -1;
 
 void
 myioctl
@@ -53,7 +55,6 @@ myioctl
   int*	arg )
 {   
     int		rc;
-    extern int	errno;
     
     rc = ioctl(fd, command, arg);  
     if (rc < 0)
@@ -76,9 +77,14 @@ I_InitSound
 
     int i;
                 
-    audio_fd = open("/dev/dsp", O_WRONLY);
+    // Not trying to open a sound FD because I don't want sound yet.
+    // audio_fd = open("/dev/dsp", O_WRONLY);
     if (audio_fd<0)
+    {
         fprintf(stderr, "Could not open /dev/dsp\n");
+        // Early exit because we don't have sounds yet.
+        return;
+    }
          
                      
     i = 11 | (2<<16);                                           
@@ -103,13 +109,19 @@ I_SubmitOutputBuffer
 ( void*	samples,
   int	samplecount )
 {
+    // Early exit for no sound
+    if (audio_fd < 0)
+    {
+        return;
+    }
+
     write(audio_fd, samples, samplecount*4);
 }
 
 void I_ShutdownSound(void)
 {
-
-    close(audio_fd);
+    if (audio_fd >= 0)
+        close(audio_fd);
 
 }
 

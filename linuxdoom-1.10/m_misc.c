@@ -30,6 +30,7 @@ rcsid[] = "$Id: m_misc.c,v 1.6 1997/02/03 22:45:10 b1 Exp $";
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -222,11 +223,32 @@ extern char*	chat_macros[];
 
 
 
+
+
 typedef struct
 {
     char*	name;
-    int*	location;
-    int		defaultvalue;
+    // This change had to be made from int* to void* because we arent
+    // just convrting to ints, but also strings, and the old behaviour
+    // forced us through a bad pointer conversion that godbolt was unhappy
+    // with me about, so I changed it.
+    void*	location;
+    // So I really wasn't familiar with hackiness of this level.
+    // What this used to be was a plain-old int, and it was used to store
+    // integral data, and characters but most importantly also strings.
+    // Read this as a really scuffed union, essentially.
+    // For int and char they are obviously trivially convertible to integer
+    // (they are just ints under the hood), but the strings were essentially
+    // declaring a string literal and then "casting" to an integer
+    // which effectively stored the location of the string. This worked bc
+    // back in the good ol' days they were working on 32 bit systems, and 
+    // sizeof(int*) == sizeof(int). Now, this is wrong. So I switched it out
+    // for an intptr_t (sidenote: coulda been a long but what the heck, if I'm
+    // doing this anyway, why not strive for "correctness"). So, we are still storing
+    // the address of a literal, but now we actually have a datatype that can store 
+    // all the bits of the addres, all the time -- but not changing behaviour of int
+    // and char, because sizeof(intptr_t) > sizeof(char) and int.
+    intptr_t defaultvalue;
     int		scantranslate;		// PC scan code hack
     int		untranslated;		// lousy hack
 } default_t;
@@ -254,15 +276,15 @@ default_t	defaults[] =
 
 // UNIX hack, to be removed. 
 #ifdef SNDSERV
-    {"sndserver", (int *) &sndserver_filename, (int) "sndserver"},
+    {"sndserver", &sndserver_filename, (intptr_t) "sndserver"},
     {"mb_used", &mb_used, 2},
 #endif
     
 #endif
 
 #ifdef LINUX
-    {"mousedev", (int*)&mousedev, (int)"/dev/ttyS0"},
-    {"mousetype", (int*)&mousetype, (int)"microsoft"},
+    {"mousedev", &mousedev, (intptr_t)"/dev/ttyS0"},
+    {"mousetype", &mousetype, (intptr_t)"microsoft"},
 #endif
 
     {"use_mouse",&usemouse, 1},
@@ -285,16 +307,16 @@ default_t	defaults[] =
 
     {"usegamma",&usegamma, 0},
 
-    {"chatmacro0", (int *) &chat_macros[0], (int) HUSTR_CHATMACRO0 },
-    {"chatmacro1", (int *) &chat_macros[1], (int) HUSTR_CHATMACRO1 },
-    {"chatmacro2", (int *) &chat_macros[2], (int) HUSTR_CHATMACRO2 },
-    {"chatmacro3", (int *) &chat_macros[3], (int) HUSTR_CHATMACRO3 },
-    {"chatmacro4", (int *) &chat_macros[4], (int) HUSTR_CHATMACRO4 },
-    {"chatmacro5", (int *) &chat_macros[5], (int) HUSTR_CHATMACRO5 },
-    {"chatmacro6", (int *) &chat_macros[6], (int) HUSTR_CHATMACRO6 },
-    {"chatmacro7", (int *) &chat_macros[7], (int) HUSTR_CHATMACRO7 },
-    {"chatmacro8", (int *) &chat_macros[8], (int) HUSTR_CHATMACRO8 },
-    {"chatmacro9", (int *) &chat_macros[9], (int) HUSTR_CHATMACRO9 }
+    {"chatmacro0", &chat_macros[0], (intptr_t) HUSTR_CHATMACRO0 },
+    {"chatmacro1", &chat_macros[1], (intptr_t) HUSTR_CHATMACRO1 },
+    {"chatmacro2", &chat_macros[2], (intptr_t) HUSTR_CHATMACRO2 },
+    {"chatmacro3", &chat_macros[3], (intptr_t) HUSTR_CHATMACRO3 },
+    {"chatmacro4", &chat_macros[4], (intptr_t) HUSTR_CHATMACRO4 },
+    {"chatmacro5", &chat_macros[5], (intptr_t) HUSTR_CHATMACRO5 },
+    {"chatmacro6", &chat_macros[6], (intptr_t) HUSTR_CHATMACRO6 },
+    {"chatmacro7", &chat_macros[7], (intptr_t) HUSTR_CHATMACRO7 },
+    {"chatmacro8", &chat_macros[8], (intptr_t) HUSTR_CHATMACRO8 },
+    {"chatmacro9", &chat_macros[9], (intptr_t) HUSTR_CHATMACRO9 }
 
 };
 
@@ -320,7 +342,8 @@ void M_SaveDefaults (void)
 	if (defaults[i].defaultvalue > -0xfff
 	    && defaults[i].defaultvalue < 0xfff)
 	{
-	    v = *defaults[i].location;
+        // location is no longer int * so we cast.
+	    v = *(int*)defaults[i].location;
 	    fprintf (f,"%s\t\t%i\n",defaults[i].name,v);
 	} else {
 	    fprintf (f,"%s\t\t\"%s\"\n",defaults[i].name,
@@ -351,7 +374,17 @@ void M_LoadDefaults (void)
     // set everything to base values
     numdefaults = sizeof(defaults)/sizeof(defaults[0]);
     for (i=0 ; i<numdefaults ; i++)
-	*defaults[i].location = defaults[i].defaultvalue;
+    {
+    // Because we are using void* now, Im force to cast to concrete types.
+    // found this logic for checking int vs. string based on pointer math
+    // and I follow it a little, but I trust in carmack so its probablly 
+    // fine
+	if (defaults[i].defaultvalue > -0xfff
+	    && defaults[i].defaultvalue < 0xfff)
+	    *(int*)defaults[i].location = (int)defaults[i].defaultvalue;
+	else
+	    *(char**)defaults[i].location = (char*)defaults[i].defaultvalue;
+    }
     
     // check for a custom default file
     i = M_CheckParm ("-config");
@@ -388,11 +421,11 @@ void M_LoadDefaults (void)
 		for (i=0 ; i<numdefaults ; i++)
 		    if (!strcmp(def, defaults[i].name))
 		    {
+            // Again, cast to concrete types
 			if (!isstring)
-			    *defaults[i].location = parm;
+			    *(int*)defaults[i].location = parm;
 			else
-			    *defaults[i].location =
-				(int) newstring;
+			    *(char**)defaults[i].location = newstring;
 			break;
 		    }
 	    }

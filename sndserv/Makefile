@@ -13,7 +13,10 @@ LIBS=-lm
 
 O=linux
 
-all:	 $(O)/sndserver
+all:	 $(O) $(O)/sndserver
+
+$(O):
+	mkdir -p $(O)
 
 clean:
 	rm -f *.o *~ *.flc
@@ -33,7 +36,6 @@ $(O)/sndserver: \
 	echo make complete.
 
 # Rule
-$(O)/%.o: %.c
+$(O)/%.o: %.c | $(O)
 	$(CC) $(CFLAGS) -c $< -o $@
-
 

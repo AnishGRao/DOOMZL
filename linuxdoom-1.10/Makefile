@@ -7,8 +7,11 @@
 CC=  gcc  # gcc or g++
 
 CFLAGS=-g -Wall -DNORMALUNIX -DLINUX # -DUSEASM 
-LDFLAGS=-L/usr/X11R6/lib
-LIBS=-lXext -lX11 -lnsl -lm
+# Kill the old link flag, did not work.
+LDFLAGS=
+
+# Removed lnsl (networking) for now, might add later.
+LIBS=-lXext -lX11 -lm
 
 # subdirectory for objects
 O=linux
@@ -77,7 +80,12 @@ OBJS=				\
 		$(O)/info.o				\
 		$(O)/sounds.o
 
-all:	 $(O)/linuxxdoom
+# Got unhappy I had to keep re-creating the linux folder after
+# stashing changes, so I forced it to create.
+all:	 $(O) $(O)/linuxxdoom
+
+$(O):
+	mkdir -p $(O)
 
 clean:
 	rm -f *.o *~ *.flc
@@ -87,7 +95,7 @@ $(O)/linuxxdoom:	$(OBJS) $(O)/i_main.o
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) $(O)/i_main.o \
 	-o $(O)/linuxxdoom $(LIBS)
 
-$(O)/%.o:	%.c
+$(O)/%.o:	%.c | $(O)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 #############################################################
