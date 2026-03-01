@@ -27,6 +27,8 @@
 static const char
 rcsid[] = "$Id: r_data.c,v 1.4 1997/02/03 16:47:55 b1 Exp $";
 
+#include <stdint.h>
+
 #include "i_system.h"
 #include "z_zone.h"
 
@@ -87,7 +89,12 @@ typedef struct
     boolean		masked;	
     short		width;
     short		height;
-    void		**columndirectory;	// OBSOLETE
+    // While this comment says obsolete, it is lying.
+    // It isnt obsolete, this was just used as 32bit
+    // padding (which a void** gives you). Now I changed
+    // the name of the field as well as its type to 
+    // properly denote its nature
+    int32_t		padding_bytes;	// OBSOLETE
     short		patchcount;
     mappatch_t	patches[1];
 } maptexture_t;
@@ -479,10 +486,17 @@ void R_InitTextures (void)
     }
     numtextures = numtextures1 + numtextures2;
 	
-    textures = Z_Malloc (numtextures*4, PU_STATIC, 0);
-    texturecolumnlump = Z_Malloc (numtextures*4, PU_STATIC, 0);
-    texturecolumnofs = Z_Malloc (numtextures*4, PU_STATIC, 0);
-    texturecomposite = Z_Malloc (numtextures*4, PU_STATIC, 0);
+    // This was another case of bad pointer sizing.
+    // textures, texturecolumnlump, texturecolumnofs
+    // and texturecomposite all were pointer type, and were 
+    // said to use 4 bytes of storage...
+    // You can see how this is a problem. I changed it to sizeof
+    // because its just easier and safer.
+    textures = Z_Malloc (numtextures * sizeof(*textures), PU_STATIC, 0);
+    texturecolumnlump = Z_Malloc (numtextures * sizeof(*texturecolumnlump), PU_STATIC, 0);
+    texturecolumnofs = Z_Malloc (numtextures * sizeof(*texturecolumnofs), PU_STATIC, 0);
+    texturecomposite = Z_Malloc (numtextures * sizeof(*texturecomposite), PU_STATIC, 0);
+    // These did not need to change, because the size of an int is still 4
     texturecompositesize = Z_Malloc (numtextures*4, PU_STATIC, 0);
     texturewidthmask = Z_Malloc (numtextures*4, PU_STATIC, 0);
     textureheight = Z_Malloc (numtextures*4, PU_STATIC, 0);
@@ -638,8 +652,21 @@ void R_InitColormaps (void)
     //  256 byte align tables.
     lump = W_GetNumForName("COLORMAP"); 
     length = W_LumpLength (lump) + 255; 
-    colormaps = Z_Malloc (length, PU_STATIC, 0); 
-    colormaps = (byte *)( ((int)colormaps + 255)&~0xff); 
+    colormaps = Z_Malloc (length, PU_STATIC, 0);
+    // Same line of code was written two different ways...
+    // this time, 0xff instead of ~255. Same fix.
+    // Read r_draw.c::R_InitTranslationTables()
+    // for more context.
+    {
+        uintptr_t const offset_forcing_next_256byte_block = 255;
+        uintptr_t const address = colormaps;
+        // Masks all values to multiples of 256
+        uintptr_t const mask = 0xFFFFFFFFFFFFFF00ULL;
+        colormaps = (byte *)((
+            address + offset_forcing_next_256byte_block
+        ) & mask);
+    }
+
     W_ReadLump (lump,colormaps); 
 }
 

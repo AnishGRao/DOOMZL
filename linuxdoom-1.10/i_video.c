@@ -164,6 +164,13 @@ int xlatekey(void)
 
 void I_ShutdownGraphics(void)
 {
+  // Fixes bug where I segfault if the screens don't
+  // start up properly due to PseudoColor thigns.
+  // Tired of cleaning up core dumps.
+  // You can probably remove this if you want less edits.
+  if (!X_display || !image || !image->data || !doShm)
+    return;
+
   // Detach from X server
   if (!XShmDetach(X_display, &X_shminfo))
 	    I_Error("XShmDetach() failed in I_ShutdownGraphics()");
