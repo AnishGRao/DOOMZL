@@ -41,6 +41,7 @@ int XShmGetEventBase( Display* dpy ); // problems with g++?
 #endif
 
 #include <stdarg.h>
+#include <stdint.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -58,6 +59,9 @@ int XShmGetEventBase( Display* dpy ); // problems with g++?
 
 #include "doomdef.h"
 
+// For system-independent sizes
+#include <limits.h>
+
 #define POINTER_WARP_COUNTDOWN	1
 
 Display*	X_display=0;
@@ -72,6 +76,10 @@ XImage*		image;
 int		X_width;
 int		X_height;
 
+// For ease of tracking whether we are using my hacky mess
+// or id software pseudocolor
+boolean		usePseudoColor8 = true;
+
 // MIT SHared Memory extension.
 boolean		doShm;
 
@@ -84,6 +92,7 @@ int		X_shmeventtype;
 boolean		grabMouse;
 int		doPointerWarp = POINTER_WARP_COUNTDOWN;
 
+// Well sorry Mr. Taylor, this really helps my implementation.
 // Blocky mode,
 // replace each 320x200 pixel with multiply*multiply pixels.
 // According to Dave Taylor, it still is a bonehead thing
@@ -382,7 +391,12 @@ void I_FinishUpdate (void)
     }
 
     // scales the screen size before blitting it
-    if (multiply == 2)
+    if (!usePseudoColor8)
+    {
+		// This is setting up the image in X11 for TrueColor.
+		doomzl_DoomFrameBufferToX11Image(image, X_height, X_width, multiply, SCREENWIDTH, screens);
+    }
+    else if (multiply == 2)
     {
 	unsigned int *olineptrs[2];
 	unsigned int *ilineptr;
@@ -551,9 +565,9 @@ void UploadNewPalette(Colormap cmap, byte *palette)
     static boolean	firstcall = true;
 
 #ifdef __cplusplus
-    if (X_visualinfo.c_class == PseudoColor && X_visualinfo.depth == 8)
+    if (usePseudoColor8 && X_visualinfo.c_class == PseudoColor && X_visualinfo.depth == 8)
 #else
-    if (X_visualinfo.class == PseudoColor && X_visualinfo.depth == 8)
+    if (usePseudoColor8 && X_visualinfo.class == PseudoColor && X_visualinfo.depth == 8)
 #endif
 	{
 	    // initialize the colormap
@@ -582,6 +596,14 @@ void UploadNewPalette(Colormap cmap, byte *palette)
 	    XStoreColors(X_display, cmap, colors, 256);
 
 	}
+    else
+    {
+		// This logix is near-fully copied from directly above. The difference is that
+		// I am not using XStoreColors here, and instead am holding onto my own colormap lookup table.
+		// We need our own condition here because the PseudoColor shifts they do will fail for us, and
+		// we need to do that stuff ourselves.
+		palette += doomzl_InitializeColorLUTFromGammaTable(usegamma, palette, gammatable);
+    }
 }
 
 //
@@ -775,8 +797,20 @@ void I_InitGraphics(void)
 
     // use the default visual 
     X_screen = DefaultScreen(X_display);
-    if (!XMatchVisualInfo(X_display, X_screen, 8, PseudoColor, &X_visualinfo))
-	I_Error("xdoom currently only supports 256-color PseudoColor screens");
+    X_depth = DefaultDepth(X_display, X_screen);
+    if (XMatchVisualInfo(X_display, X_screen, 8, PseudoColor, &X_visualinfo))
+    {
+	usePseudoColor8 = true;
+    }
+	// Add a fallback to my TrueColor implementation
+    else if (doomzl_TrueColorFallback(X_display, X_screen, &X_visualinfo))
+    {
+		usePseudoColor8 = false;
+    }
+    else
+    {
+		I_Error("True Color fallback failed, and PseudoColor failed. Start reading the code.");
+    }
     X_visual = X_visualinfo.visual;
 
     // check for the MITSHM extension
@@ -797,9 +831,12 @@ void I_InitGraphics(void)
 
     fprintf(stderr, "Using MITSHM extension\n");
 
+	// We don't want to allocate anything for our TrueColor implementation,
+	// we will hold onto our own lookup table
     // create the colormap
     X_cmap = XCreateColormap(X_display, RootWindow(X_display,
-						   X_screen), X_visual, AllocAll);
+						   X_screen), X_visual,
+			     usePseudoColor8 ? AllocAll : AllocNone);
 
     // setup attributes for main window
     attribmask = CWEventMask | CWColormap | CWBorderPixel;
@@ -818,7 +855,7 @@ void I_InitGraphics(void)
 					x, y,
 					X_width, X_height,
 					0, // borderwidth
-					8, // depth
+					X_visualinfo.depth, // depth
 					InputOutput,
 					X_visual,
 					attribmask,
@@ -865,7 +902,7 @@ void I_InitGraphics(void)
 	// create the image
 	image = XShmCreateImage(	X_display,
 					X_visual,
-					8,
+					X_visualinfo.depth,
 					ZPixmap,
 					0,
 					&X_shminfo,
@@ -900,6 +937,30 @@ void I_InitGraphics(void)
 	    I_Error("XShmAttach() failed in InitGraphics()");
 
     }
+    else if (!usePseudoColor8)
+    {
+		// Fully grabbed the below alternative to the ShmAttach
+		// Difference is, I want to do my own malloc.
+		// Here: https://linux.die.net/man/3/xcreateimage
+		// 
+		image = XCreateImage(	
+						X_display,
+    					X_visual,
+						// Depth is now whatever our color said it was, not just 8
+						// by default
+    					X_visualinfo.depth,
+    					ZPixmap,
+    					0,
+    					0,
+    					X_width, X_height,
+						// According to the manpage this can be read as num bits in int.
+    					sizeof(int)*CHAR_BIT,
+						// No clue why this is set to X_width by default -- this is number of bytes in image between one scanline and
+						// next. Setting this to 0 seems fine.
+    					0 );
+		// Do the malloc not in-line, for the exact numbers
+		image->data = (char*)malloc(image->bytes_per_line * image->height);
+    }
     else
     {
 	image = XCreateImage(	X_display,
@@ -914,7 +975,8 @@ void I_InitGraphics(void)
 
     }
 
-    if (multiply == 1)
+
+    if (usePseudoColor8 && multiply == 1)
 	screens[0] = (unsigned char *) (image->data);
     else
 	screens[0] = (unsigned char *) malloc (SCREENWIDTH * SCREENHEIGHT);

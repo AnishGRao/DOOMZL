@@ -14,8 +14,10 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-    void do_some_stuff();
+    int doomzl_TrueColorFallback(Display*display, int screen, XVisualInfo*visual_info);
+    unsigned long doomzl_MapDoomColorToTrueColor(int r, int g, int b);
+    int doomzl_InitializeColorLUTFromGammaTable(int usegamma, unsigned char * palette, unsigned char (*gammatable)[256]);
+    void doomzl_DoomFrameBufferToX11Image(XImage * image, int height, int width, int multiply, int doom_screenwidth, unsigned char ** screens);
 
 #ifdef __cplusplus
 }
