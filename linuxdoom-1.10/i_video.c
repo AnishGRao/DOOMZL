@@ -797,7 +797,6 @@ void I_InitGraphics(void)
 
     // use the default visual 
     X_screen = DefaultScreen(X_display);
-    X_depth = DefaultDepth(X_display, X_screen);
     if (XMatchVisualInfo(X_display, X_screen, 8, PseudoColor, &X_visualinfo))
     {
 	usePseudoColor8 = true;
