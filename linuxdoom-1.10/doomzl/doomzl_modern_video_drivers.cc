@@ -183,17 +183,16 @@ namespace doomzl
             return 256*3;
         }
 
-        void DoomFrameBufferToX11Image(XImage * image, int const height, int const width, int const multiply, int const doom_screenwidth, unsigned char ** screens)
+        void DoomFrameBufferToX11Image(XImage * image, int const height, int const width, int const multiply, int const doom_screenwidth, int const doom_screenheight, unsigned char ** screens)
         {
-
             for (int row = 0; row < height; row++)
             {
-                int scaled_row_to_doom_row = row / multiply;
+                int scaled_row_to_doom_row = (row * doom_screenheight) / height;
                 unsigned char * scanline = (unsigned char * )(screens[0] + scaled_row_to_doom_row * doom_screenwidth);
 
                 for (int col = 0; col < width; col++)
                 {
-                    int scaled_col_to_doom_col = col / multiply;
+                    int scaled_col_to_doom_col = (col * doom_screenwidth) / width;
                     XPutPixel(image, col, row, constants()->colormap[scanline[scaled_col_to_doom_col]]);
                 }
             }
@@ -201,9 +200,9 @@ namespace doomzl
     }
 }
 
-extern "C" void doomzl_DoomFrameBufferToX11Image(XImage * image, int height, int width, int multiply, int doom_screenwidth, unsigned char ** screens)
+extern "C" void doomzl_DoomFrameBufferToX11Image(XImage * image, int height, int width, int multiply, int doom_screenwidth, int doom_screenheight, unsigned char ** screens)
 {
-    return doomzl::Video::DoomFrameBufferToX11Image(image, height, width, multiply, doom_screenwidth, screens);
+    return doomzl::Video::DoomFrameBufferToX11Image(image, height, width, multiply, doom_screenwidth, doom_screenheight, screens);
 }
 
 extern "C" int doomzl_InitializeColorLUTFromGammaTable(int usegamma, unsigned char * palette,unsigned char (*gammatable)[256])

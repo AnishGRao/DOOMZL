@@ -56,6 +56,7 @@ int XShmGetEventBase( Display* dpy ); // problems with g++?
 #include "v_video.h"
 #include "m_argv.h"
 #include "d_main.h"
+#include "doomzl/doomzl_modern_video_drivers.h"
 
 #include "doomdef.h"
 
@@ -98,6 +99,12 @@ int		doPointerWarp = POINTER_WARP_COUNTDOWN;
 // According to Dave Taylor, it still is a bonehead thing
 // to use ....
 static int	multiply=1;
+
+static void I_RecreateImage(int new_width, int new_height);
+
+// Forward declare this in the same file because I don't want to change 
+// function ordering.
+void grabsharedmemory(int size);
 
 
 //
@@ -285,7 +292,18 @@ void I_GetEvent(void)
 	break;
 	
       case Expose:
+		break;
+	  // Add handling for configurenotify specifically when we are using our stuff,
+	  // but only call our new function when the window size is trying to change.
       case ConfigureNotify:
+		if (!usePseudoColor8
+	    	&& X_event.xconfigure.width > 0
+	    	&& X_event.xconfigure.height > 0
+	    	&& (X_event.xconfigure.width != X_width
+			|| X_event.xconfigure.height != X_height))
+		{
+			I_RecreateImage(X_event.xconfigure.width, X_event.xconfigure.height);
+		}
 	break;
 	
       default:
@@ -293,6 +311,64 @@ void I_GetEvent(void)
 	break;
     }
 
+}
+
+// @warning:
+// Had to write this in C because passing down the pointers was hellish.
+// Also made the C++ look really bad. So, I got this function from essentially
+// looking through how all the other images where refreshed, and reading the X11
+// docs. I'm not very confident in how this works, and it's likely very dangerous.
+static void I_RecreateImage(int new_width, int new_height)
+{
+    if (!X_display || !X_visual || !X_gc)
+	{
+		return;
+	}
+
+	// This means we are using the mit-x11 share memory alloc strat
+    if (doShm)
+    {
+		if (image)
+		{
+		    if (image->data)
+		    {
+				XShmDetach(X_display, &X_shminfo);
+				shmdt(X_shminfo.shmaddr);
+				shmctl(X_shminfo.shmid, IPC_RMID, 0);
+				image->data = NULL;
+		    }
+		    XDestroyImage(image);
+		}
+
+		X_width = new_width;
+		X_height = new_height;
+
+		X_shmeventtype = XShmGetEventBase(X_display) + ShmCompletion;
+		image = XShmCreateImage(X_display, X_visual, X_visualinfo.depth,
+					ZPixmap, 0, &X_shminfo, X_width, X_height);
+		grabsharedmemory(image->bytes_per_line * image->height);
+		if (!image->data)
+		    I_Error("shmat() failed in I_RecreateImage()");
+		if (!XShmAttach(X_display, &X_shminfo))
+		    I_Error("XShmAttach() failed in I_RecreateImage()");
+    }
+    else
+    {
+		if (image)
+		{
+		    if (image->data)
+			free(image->data);
+		    image->data = NULL;
+		    XDestroyImage(image);
+		}
+
+		X_width = new_width;
+		X_height = new_height;
+
+		image = XCreateImage(X_display, X_visual, X_visualinfo.depth, ZPixmap,
+				     0, 0, X_width, X_height, 32, 0);
+		image->data = (char*)malloc(image->bytes_per_line * image->height);
+    }
 }
 
 Cursor
@@ -394,7 +470,7 @@ void I_FinishUpdate (void)
     if (!usePseudoColor8)
     {
 		// This is setting up the image in X11 for TrueColor.
-		doomzl_DoomFrameBufferToX11Image(image, X_height, X_width, multiply, SCREENWIDTH, screens);
+		doomzl_DoomFrameBufferToX11Image(image, X_height, X_width, multiply, SCREENWIDTH, SCREENHEIGHT, screens);
     }
     else if (multiply == 2)
     {
@@ -814,6 +890,12 @@ void I_InitGraphics(void)
 
     // check for the MITSHM extension
     doShm = XShmQueryExtension(X_display);
+ 	// Add in a guard here against trying to call the below conditional.  
+	// (It fails.)
+	if (!usePseudoColor8)
+	{
+		doShm = false;
+	}
 
     // even if it's available, make sure it's a local connection
     if (doShm)
@@ -843,7 +925,9 @@ void I_InitGraphics(void)
 	KeyPressMask
 	| KeyReleaseMask
 	// | PointerMotionMask | ButtonPressMask | ButtonReleaseMask
-	| ExposureMask;
+	| ExposureMask
+	// We need to "subscribe" to the window being modified event.
+	| StructureNotifyMask;
 
     attribs.colormap = X_cmap;
     attribs.border_pixel = 0;
