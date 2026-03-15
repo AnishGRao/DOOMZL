@@ -784,36 +784,35 @@ I_InitSound()
   // Secure and configure sound device first.
   fprintf( stderr, "I_InitSound: ");
   
-  // Removal of the "real" audio fd
-  // audio_fd = open("/dev/dsp", O_WRONLY);
-  if (audio_fd<0)
+  // Need to do the rest of this func,
+  // not just early return.
+  audio_fd = open("/dev/dsp", O_WRONLY);
+  if (audio_fd < 0)
   {
-    fprintf(stderr, "Could not open /dev/dsp\n");
-    // Early exit here, as the remaining logic delas with sounds
-    // and while it *does* mutate some buffs, we skip functions that use them.
-    return;
+    fprintf(stderr, "Could not open /dev/dsp; sound output disabled\n");
   }
-  
-                     
-  i = 11 | (2<<16);                                           
-  myioctl(audio_fd, SNDCTL_DSP_SETFRAGMENT, &i);
-  myioctl(audio_fd, SNDCTL_DSP_RESET, 0);
-  
-  i=SAMPLERATE;
-  
-  myioctl(audio_fd, SNDCTL_DSP_SPEED, &i);
-  
-  i=1;
-  myioctl(audio_fd, SNDCTL_DSP_STEREO, &i);
-  
-  myioctl(audio_fd, SNDCTL_DSP_GETFMTS, &i);
-  
-  if (i&=AFMT_S16_LE)    
-    myioctl(audio_fd, SNDCTL_DSP_SETFMT, &i);
   else
-    fprintf(stderr, "Could not play signed 16 data\n");
+  {
+    i = 11 | (2<<16);                                           
+    myioctl(audio_fd, SNDCTL_DSP_SETFRAGMENT, &i);
+    myioctl(audio_fd, SNDCTL_DSP_RESET, 0);
+    
+    i=SAMPLERATE;
+    
+    myioctl(audio_fd, SNDCTL_DSP_SPEED, &i);
+    
+    i=1;
+    myioctl(audio_fd, SNDCTL_DSP_STEREO, &i);
+    
+    myioctl(audio_fd, SNDCTL_DSP_GETFMTS, &i);
+    
+    if (i&=AFMT_S16_LE)    
+      myioctl(audio_fd, SNDCTL_DSP_SETFMT, &i);
+    else
+      fprintf(stderr, "Could not play signed 16 data\n");
 
-  fprintf(stderr, " configured audio device\n" );
+    fprintf(stderr, " configured audio device\n" );
+  }
 
     
   // Initialize external data (all sounds) at start, keep static.

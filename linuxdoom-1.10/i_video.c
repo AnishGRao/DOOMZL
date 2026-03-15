@@ -356,10 +356,7 @@ static void I_RecreateImage(int new_width, int new_height)
     {
 		if (image)
 		{
-		    if (image->data)
-			free(image->data);
-		    image->data = NULL;
-		    XDestroyImage(image);
+			XDestroyImage(image);
 		}
 
 		X_width = new_width;
