@@ -1,0 +1,34 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+# Base doom with our lib
+cc_binary(
+    name = "DOOM",
+    srcs = glob([
+        "*.c",
+        "*.h"
+    ]),
+    copts = [
+        "-Wall",
+    ],
+    linkopts = [
+        "-lXext",
+        "-lX11",
+        "-lm"
+    ],
+    defines = [
+        "NORMALUNIX",
+        "LINUX"
+    ],
+    deps = ["//linux/doomzl"],
+    data = [
+        "//doom_wads:wad"
+    ],
+    includes = [
+        "doomzl/"
+    ],
+    visibility = ["//visibility:public"],
+    args = [
+        "-file", 
+        "$(location //doom_wads:wad)"
+    ]
+)

@@ -27,6 +27,7 @@
 static const char
 rcsid[] = "$Id: r_draw.c,v 1.4 1997/02/03 16:47:55 b1 Exp $";
 
+#include <stdint.h>
 
 #include "doomdef.h"
 
@@ -461,7 +462,44 @@ void R_InitTranslationTables (void)
     int		i;
 	
     translationtables = Z_Malloc (256*3+255, PU_STATIC, 0);
-    translationtables = (byte *)(( (int)translationtables + 255 )& ~255);
+
+    // Fix for R_InitSkyMap segfault.
+    // Previous code:
+    // translationtables = 
+    //  (byte *)(( (int)translationtables + 255 )& ~255);
+    // ( why were the old gods so damn fond of uncommented bit magic????) 
+    // Spent a while in godbolt on this one (just tracking it down in ASAN was a nightmare)
+    // essentially, translationtables is a void* of allocated memory.
+    // We then shove it into the next 256 block of memory by adding 255, and 
+    // then allocate whatever remains.
+    // You can read the old code as this:
+    // intptr_t addr = translationtables;
+    // if (addr%256 == 0) // do nothing
+    // else allocate remaining bytes to fill it up.
+    // FYI: ~255 is to clear 8 bits from LSB (2**8 = 256) which
+    // when anded forces a value that is easily divisible.
+
+    // Thats just the explanation of how it used to work. Not why it changed.
+    // So, again, we run into the fact that pointers and ints are no longer
+    // sized the same. This logic does one thing different -- It forces the 
+    // void* to become a uintptr_t and makes the mask a uintptr_t, which keeps
+    // the 32bits that were being truncated previously.
+    // I also changed it visually -- you could write it exactly as before,
+    // but with the uintptr_t change, but I found that unreadable and for
+    // how much time I spent to fix it, im going to write it nicely.
+    // Heres the version more like the original:
+    // translationtables =
+	//    (byte *)((((uintptr_t)translationtables) + 255) & ~(uintptr_t)255);
+    // Heres mine:
+    {
+        uintptr_t const offset_forcing_next_256byte_block = 255;
+        uintptr_t const address = translationtables;
+        // Masks all values to multiples of 256
+        uintptr_t const mask = 0xFFFFFFFFFFFFFF00ULL;
+        translationtables = (byte *)((
+            address + offset_forcing_next_256byte_block
+        ) & mask);
+    }
     
     // translate just the 16 green colors
     for (i=0 ; i<256 ; i++)

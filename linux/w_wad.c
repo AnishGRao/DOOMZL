@@ -328,6 +328,7 @@ void W_InitFile (char* filename)
 
     names[0] = filename;
     names[1] = NULL;
+
     W_InitMultipleFiles (names);
 }
 

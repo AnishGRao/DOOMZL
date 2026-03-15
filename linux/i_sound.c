@@ -41,6 +41,10 @@ rcsid[] = "$Id: i_unix.c,v 1.5 1997/02/03 22:45:10 b1 Exp $";
 #include <unistd.h>
 #include <sys/ioctl.h>
 
+// Now include standard errno header, rather than relying on older
+// `extern int errno` stuff
+#include <errno.h>
+
 // Linux voxware output.
 #include <linux/soundcard.h>
 
@@ -103,7 +107,11 @@ static int flag = 0;
 int 		lengths[NUMSFX];
 
 // The actual output device.
-int	audio_fd;
+// This addition is so we can just easily disable sound.
+// Given fds are <0 when fail to open, we just comment out the
+// line actually calling open, and the safety logic for fd failure
+// just disables sounds for us.
+int	audio_fd = -1;
 
 // The global mixing buffer.
 // Basically, samples from all active internal channels
@@ -163,7 +171,6 @@ myioctl
   int*	arg )
 {   
     int		rc;
-    extern int	errno;
     
     rc = ioctl(fd, command, arg);  
     if (rc < 0)
@@ -665,6 +672,11 @@ void I_UpdateSound( void )
 void
 I_SubmitSound(void)
 {
+  // Adding in this check so that we dont accidentally write some
+  // stuff we arent meant to
+  if (audio_fd < 0)
+    return;
+
   // Write it to DSP device.
   write(audio_fd, mixbuffer, SAMPLECOUNT*BUFMUL);
 }
@@ -721,8 +733,13 @@ void I_ShutdownSound(void)
   I_SoundDelTimer();
 #endif
   
+  // Again, checking for existence of our fd. Not actually sure about 
+  // what the behavior of trying to close a failed fd is, but its easier
+  // for me to write this comment and add the conditional than looking at
+  // the man page.
   // Cleaning up -releasing the DSP device.
-  close ( audio_fd );
+  if (audio_fd >= 0)
+    close ( audio_fd );
 #endif
 
   // Done.
@@ -767,30 +784,35 @@ I_InitSound()
   // Secure and configure sound device first.
   fprintf( stderr, "I_InitSound: ");
   
+  // Need to do the rest of this func,
+  // not just early return.
   audio_fd = open("/dev/dsp", O_WRONLY);
-  if (audio_fd<0)
-    fprintf(stderr, "Could not open /dev/dsp\n");
-  
-                     
-  i = 11 | (2<<16);                                           
-  myioctl(audio_fd, SNDCTL_DSP_SETFRAGMENT, &i);
-  myioctl(audio_fd, SNDCTL_DSP_RESET, 0);
-  
-  i=SAMPLERATE;
-  
-  myioctl(audio_fd, SNDCTL_DSP_SPEED, &i);
-  
-  i=1;
-  myioctl(audio_fd, SNDCTL_DSP_STEREO, &i);
-  
-  myioctl(audio_fd, SNDCTL_DSP_GETFMTS, &i);
-  
-  if (i&=AFMT_S16_LE)    
-    myioctl(audio_fd, SNDCTL_DSP_SETFMT, &i);
+  if (audio_fd < 0)
+  {
+    fprintf(stderr, "Could not open /dev/dsp; sound output disabled\n");
+  }
   else
-    fprintf(stderr, "Could not play signed 16 data\n");
+  {
+    i = 11 | (2<<16);                                           
+    myioctl(audio_fd, SNDCTL_DSP_SETFRAGMENT, &i);
+    myioctl(audio_fd, SNDCTL_DSP_RESET, 0);
+    
+    i=SAMPLERATE;
+    
+    myioctl(audio_fd, SNDCTL_DSP_SPEED, &i);
+    
+    i=1;
+    myioctl(audio_fd, SNDCTL_DSP_STEREO, &i);
+    
+    myioctl(audio_fd, SNDCTL_DSP_GETFMTS, &i);
+    
+    if (i&=AFMT_S16_LE)    
+      myioctl(audio_fd, SNDCTL_DSP_SETFMT, &i);
+    else
+      fprintf(stderr, "Could not play signed 16 data\n");
 
-  fprintf(stderr, " configured audio device\n" );
+    fprintf(stderr, " configured audio device\n" );
+  }
 
     
   // Initialize external data (all sounds) at start, keep static.
@@ -922,6 +944,13 @@ void I_HandleSoundTimer( int ignore )
   // Feed sound device if necesary.
   if ( flag )
   {
+    // Again, early exiting on sound "failure"
+    if (audio_fd < 0)
+    {
+      flag = 0;
+      return;
+    }
+
     // See I_SubmitSound().
     // Write it to DSP device.
     write(audio_fd, mixbuffer, SAMPLECOUNT*BUFMUL);

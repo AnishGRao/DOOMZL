@@ -785,7 +785,23 @@ void M_DrawReadThis2(void)
 	break;
       case shareware:
       case registered:
-	V_DrawPatchDirect (0,0,0,W_CacheLumpName("HELP2",PU_CACHE));
+      {
+        // Previously, this was just going into HELP2 which was
+        // erroring out because apparently HELP2 doesnt exist. I 
+        // found the wad im using has a help1 though... So I added
+        // a quick override for that jic others have this problem.
+        // Added this here and in f_finale.c and d_main.c. Same
+        // logic/reasoning for all three.
+
+        if (W_CheckNumForName("HELP2") != -1)
+        {
+	        V_DrawPatchDirect (0,0,0,W_CacheLumpName("HELP2",PU_CACHE));
+        }
+        else if (W_CheckNumForName("HELP1") != -1)
+        {
+	        V_DrawPatchDirect (0,0,0,W_CacheLumpName("HELP1",PU_CACHE));
+        }
+      }
 	break;
       default:
 	break;
@@ -1890,4 +1906,3 @@ void M_Init (void)
     }
     
 }
-
