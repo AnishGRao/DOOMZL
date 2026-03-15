@@ -1,5 +1,10 @@
-# Find your shareware. I recommend a site that rhymes with WosWox
-DOOMWADDIR/**
+doom_wads/doom.wad
 
 # Don't commit build outputs.
 sndserv/linux/**
+
+bazel-*/**
+bazel-bin/**
+bazel-DOOM/**
+bazel-out/**
+bazel-testlogs/**

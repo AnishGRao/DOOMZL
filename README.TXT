@@ -1,4 +1,15 @@
 
+@arao prelude:
+    If you want to run this codebase, simply run `bazel run doom` from the root of this repository.
+    If you run into errors with missing files, includes, etc. install bazel. Please refer to the
+    bazel documentation for your specific operating system: https://bazel.build/install
+
+    Add your own WAD to DOOMWADDIR.
+
+    This was only meant to work on linux. Zero thought or effort has been put in for Windows or MacOS.
+
+
+
 Here it is, at long last.  The DOOM source code is released for your
 non-profit use.  You still need real DOOM data to work with this code.
 If you don't actually own a real copy of one of the DOOMs, you should

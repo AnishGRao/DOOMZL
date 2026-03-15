@@ -1,0 +1,13 @@
+common --color=yes
+common --show_result=10
+common --enable_bzlmod
+
+common --action_env=DOOMWADDIR=%workspace%/DOOMWADDIR/
+
+run --run_env=DOOMWADDIR=/home/arao2/doomzl/DOOM/DOOMWADDIR/
+
+build --spawn_strategy=dynamic
+build --remote_build_event_upload=minimal
+build --sandbox_default_allow_network=false
+build --use_action_cache
+build --jobs=HOST_CPUS*0.75

@@ -1,0 +1,4 @@
+alias(
+    name = "doom",
+    actual = "//linux:DOOM"
+)

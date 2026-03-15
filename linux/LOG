@@ -1,0 +1,1 @@
+g++ -std=c++17 -c -I doomzl/ -c doomzl/*.cc -o linux/doomzl.o

@@ -1,0 +1,6 @@
+
+filegroup(
+    name = "wad",
+    srcs = ["doom.wad"],
+    visibility = ["//visibility:public"],
+)
