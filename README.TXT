@@ -4,7 +4,7 @@
     If you run into errors with missing files, includes, etc. install bazel. Please refer to the
     bazel documentation for your specific operating system: https://bazel.build/install
 
-    Add your own WAD to DOOMWADDIR.
+    Add your own WAD to doom_wads.
 
     This was only meant to work on linux. Zero thought or effort has been put in for Windows or MacOS.
 
